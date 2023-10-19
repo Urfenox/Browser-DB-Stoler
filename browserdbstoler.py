@@ -31,11 +31,11 @@ except ModuleNotFoundError:
     except:
         sys.exit()
 try:
-    from Cryptodome.Cipher import AES
+    from Crypto.Cipher import AES
 except ModuleNotFoundError:
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", 'pycryptodome'], stdout=subprocess.DEVNULL)
-        from Cryptodome.Cipher import AES
+        from Crypto.Cipher import AES
     except:
         sys.exit()
 
