@@ -25,3 +25,6 @@ The FTP www directory must look something like:
 
 And you need to be able to see `cookies.php` from a webbroser. Like `https://example/BrowserDBStoler/cookies.php`.  
 And, you need to be able to download `browserdbstoler.py` from a webbrowser too. Like `https://example/BrowserDBStoler/browserdbstoler.py`.  
+
+### NOTICE
+I am not responsible for any misuse that may be given to the script. This was designed for educational purposes for an evaluation for the Cybersecurity subject.
