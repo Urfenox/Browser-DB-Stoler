@@ -1,7 +1,7 @@
 import os, sys, subprocess, time
 import json, sqlite3
 import shutil
-import base64, win32crypt
+import base64
 from time import gmtime, strftime
 from enum import Enum
 
@@ -19,6 +19,14 @@ except ModuleNotFoundError:
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", 'pycryptodome'], stdout=subprocess.DEVNULL)
         from Crypto.Cipher import AES
+    except:
+        sys.exit()
+try:
+    import win32crypt
+except ModuleNotFoundError:
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", 'pypiwin32'], stdout=subprocess.DEVNULL)
+        import win32crypt
     except:
         sys.exit()
 

